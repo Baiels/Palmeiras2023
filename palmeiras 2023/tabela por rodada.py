@@ -4,7 +4,6 @@ import re
 import os
 
 
-# --- Funções de Normalização e Cálculo ---
 
 def normalizar_nome(nome):
     """Remove acentos, converte para minúsculas e remove caracteres especiais/espaços, mantendo apenas letras."""
@@ -13,7 +12,6 @@ def normalizar_nome(nome):
 
     nome = str(nome).lower()
 
-    # Substituição manual de caracteres acentuados
     acentos = {
         'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a',
         'é': 'e', 'ê': 'e',
@@ -25,14 +23,12 @@ def normalizar_nome(nome):
     for char, replacement in acentos.items():
         nome = nome.replace(char, replacement)
 
-    # Remover tudo que não for letra, incluindo espaços e parênteses
     nome = re.sub(r'[^a-z]', '', nome)
 
     return nome
 
 
 def calcular_pontos(resultado):
-    """Converte o resultado do jogo (V, E, D) em pontos (3, 1, 0)."""
     if resultado == 'V':
         return 3
     elif resultado == 'E':
@@ -42,7 +38,7 @@ def calcular_pontos(resultado):
     return 0
 
 
-# --- Função Principal de Análise (Pontuação por Rodada) ---
+
 
 def analisar_pontuacao_por_rodada(file_path, times_alvo_exibicao):
     try:
@@ -61,23 +57,19 @@ def analisar_pontuacao_por_rodada(file_path, times_alvo_exibicao):
         df['Time_Normalizado'] = df['Time_Jogo'].apply(normalizar_nome)
         df['Adversario_Normalizado'] = df['Adversario'].apply(normalizar_nome)
 
-        # Criar listas de nomes normalizados
         times_alvo_normalizado = [normalizar_nome(t) for t in times_alvo_exibicao]
         mapa_exibicao = {normalizar_nome(nome): nome for nome in times_alvo_exibicao}
 
-        # Ajuste manual para o Botafogo, que no CSV aparece como 'Botafogo RJ' ou 'Botafogo (RJ)'
         mapa_exibicao['botafogorj'] = 'Botafogo'
         times_alvo_normalizado.append('botafogorj')
         times_alvo_normalizado = list(set(times_alvo_normalizado))
 
-        # Remover o 'Botafogo' original da lista de normalizados se estiver lá
         if 'botafogo' in times_alvo_normalizado:
             times_alvo_normalizado.remove('botafogo')
 
         df_final_jogos = pd.DataFrame()
 
         for time_normalizado in times_alvo_normalizado:
-            # Jogos como 'Time'
             df_time = df[df['Time_Normalizado'] == time_normalizado].copy()
             if not df_time.empty:
                 df_time['Time_Alvo'] = mapa_exibicao.get(time_normalizado)
@@ -85,7 +77,6 @@ def analisar_pontuacao_por_rodada(file_path, times_alvo_exibicao):
                 df_time['Pontos'] = df_time['Resultado_Alvo'].apply(calcular_pontos)
                 df_final_jogos = pd.concat([df_final_jogos, df_time])
 
-            # Jogos como 'Adversario'
             df_adversario = df[df['Adversario_Normalizado'] == time_normalizado].copy()
             if not df_adversario.empty:
                 df_adversario['Time_Alvo'] = mapa_exibicao.get(time_normalizado)
@@ -123,7 +114,6 @@ if __name__ == "__main__":
         'Bragantino'
     ]
 
-    # Execução do script (pontuação por rodada)
     resultado_rodada = analisar_pontuacao_por_rodada(file_path, TIMES_ALVO_EXIBICAO)
 
     if isinstance(resultado_rodada, pd.DataFrame):
@@ -133,3 +123,4 @@ if __name__ == "__main__":
         print(resultado_rodada.to_markdown(numalign="center", stralign="center"))
     else:
         print(resultado_rodada)
+
