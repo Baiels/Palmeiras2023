@@ -4,7 +4,6 @@ import re
 import os
 
 
-# --- Funções de Normalização e Cálculo ---
 
 def normalizar_nome(nome):
     """Remove acentos, converte para minúsculas e remove caracteres especiais/espaços, mantendo apenas letras."""
@@ -25,14 +24,12 @@ def normalizar_nome(nome):
     for char, replacement in acentos.items():
         nome = nome.replace(char, replacement)
 
-    # Remover tudo que não for letra, incluindo espaços e parênteses
     nome = re.sub(r'[^a-z]', '', nome)
 
     return nome
 
 
 def calcular_pontos(resultado):
-    """Converte o resultado do jogo (V, E, D) em pontos (3, 1, 0)."""
     if resultado == 'V':
         return 3
     elif resultado == 'E':
@@ -43,7 +40,6 @@ def calcular_pontos(resultado):
 
 
 def calcular_pontos_por_periodo(file_path, time_alvo_exibicao):
-    """Calcula os pontos conquistados vs. possíveis para um time alvo nos períodos."""
     df = pd.read_csv(file_path)
 
     df.rename(columns={
@@ -61,7 +57,6 @@ def calcular_pontos_por_periodo(file_path, time_alvo_exibicao):
 
     time_alvo_normalizado = normalizar_nome(time_alvo_exibicao)
 
-    # Ajuste para o Botafogo, que está como 'Botafogo (RJ)' no CSV
     if time_alvo_exibicao == 'Botafogo':
         time_alvo_normalizado_csv = 'botafogorj'
     else:
@@ -69,7 +64,6 @@ def calcular_pontos_por_periodo(file_path, time_alvo_exibicao):
 
     df_final_jogos = pd.DataFrame()
 
-    # Jogos onde o time é o 'Time'
     df_time = df[df['Time_Normalizado'] == time_alvo_normalizado_csv].copy()
     if not df_time.empty:
         df_time['Time_Alvo'] = time_alvo_exibicao
@@ -77,7 +71,6 @@ def calcular_pontos_por_periodo(file_path, time_alvo_exibicao):
         df_time['Pontos'] = df_time['Resultado_Alvo'].apply(calcular_pontos)
         df_final_jogos = pd.concat([df_final_jogos, df_time])
 
-    # Jogos onde o time é o 'Adversario'
     df_adversario = df[df['Adversario_Normalizado'] == time_alvo_normalizado_csv].copy()
     if not df_adversario.empty:
         df_adversario['Time_Alvo'] = time_alvo_exibicao
@@ -91,7 +84,6 @@ def calcular_pontos_por_periodo(file_path, time_alvo_exibicao):
     if df_final_jogos.empty:
         return None
 
-    # Agrupar por rodada para somar os pontos
     pontos_por_rodada = df_final_jogos.groupby('Rodada')['Pontos'].sum().reset_index()
 
     periodos = [
@@ -133,7 +125,6 @@ def calcular_pontos_por_periodo(file_path, time_alvo_exibicao):
 if __name__ == "__main__":
     file_path = r"C:\Users\bielz\Desktop\hammy\brasileirao2023-main\trabalho\Serie A 2023.csv"
 
-    # Tabela do Botafogo
     df_pontos_botafogo = calcular_pontos_por_periodo(file_path, 'Botafogo')
 
     if df_pontos_botafogo is not None:
@@ -145,7 +136,6 @@ if __name__ == "__main__":
 
     print("\n" + "=" * 80 + "\n")
 
-    # Tabela do Palmeiras
     df_pontos_palmeiras = calcular_pontos_por_periodo(file_path, 'Palmeiras')
 
     if df_pontos_palmeiras is not None:
@@ -154,3 +144,4 @@ if __name__ == "__main__":
         print(df_pontos_palmeiras.to_markdown(numalign="center", stralign="center", floatfmt=".2f"))
     else:
         print("Erro ao calcular os pontos do Palmeiras.")
+
