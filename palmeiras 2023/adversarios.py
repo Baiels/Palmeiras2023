@@ -4,16 +4,14 @@ import re
 import os
 
 
-# --- Funções de Normalização e Cálculo ---
+
 
 def normalizar_nome(nome):
-    """Remove acentos, converte para minúsculas e remove caracteres especiais/espaços, mantendo apenas letras."""
     if pd.isna(nome):
         return nome
 
     nome = str(nome).lower()
 
-    # Substituição manual de caracteres acentuados
     acentos = {
         'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a',
         'é': 'e', 'ê': 'e',
@@ -25,14 +23,12 @@ def normalizar_nome(nome):
     for char, replacement in acentos.items():
         nome = nome.replace(char, replacement)
 
-    # Remover tudo que não for letra, incluindo espaços e parênteses
     nome = re.sub(r'[^a-z]', '', nome)
 
     return nome
 
 
 def calcular_pontos(resultado):
-    """Converte o resultado do jogo (V, E, D) em pontos (3, 1, 0)."""
     if resultado == 'V':
         return 3
     elif resultado == 'E':
@@ -43,7 +39,6 @@ def calcular_pontos(resultado):
 
 
 def limpar_nome_exibicao(nome_original):
-    """Limpa o nome do time para exibição, removendo sufixos de estado e corrigindo nomes comuns."""
     if pd.isna(nome_original):
         return nome_original
 
@@ -93,13 +88,8 @@ def limpar_nome_exibicao(nome_original):
 
 
 def calcular_classificacao_completa(df_original):
-    """
-    Calcula a classificação acumulada (Pontos, SG, GP) para TODOS os 20 times
-    em todas as rodadas.
-    """
     df = df_original.copy()
 
-    # Renomear colunas para facilitar o uso (usando os nomes reais do CSV)
     df.rename(columns={
         'Oponente': 'Adversario',
         'GC_x': 'Gols_Contra_Jogo',
@@ -110,22 +100,17 @@ def calcular_classificacao_completa(df_original):
 
     df['Rodada'] = df['Rodada'].astype(str).str.replace('Rodada da semana ', '', regex=False).astype(int)
 
-    # Normalizar nomes para mapeamento
     df['Time_Normalizado'] = df['Time_Jogo'].apply(normalizar_nome)
     df['Adversario_Normalizado'] = df['Adversario'].apply(normalizar_nome)
 
-    # Lista de todos os times únicos (normalizados)
     todos_times_normalizados = pd.concat([df['Time_Normalizado'], df['Adversario_Normalizado']]).unique()
 
-    # Mapeamento de nomes normalizados para nomes de exibição (usando o nome mais comum)
     mapa_exibicao = {}
     for nome_original in pd.concat([df['Time_Jogo'], df['Adversario']]).unique():
-        # Tentativa de limpar o nome para exibição
         nome_limpo = nome_original.replace(' (RJ)', '').replace(' (MG)', '').replace(' Ath Paranaense',
                                                                                      'Athletico Paranaense')
         mapa_exibicao[normalizar_nome(nome_original)] = limpar_nome_exibicao(nome_original)
 
-    # Ajuste manual para o Botafogo
     mapa_exibicao['botafogorj'] = 'Botafogo'
 
     df_final_jogos = pd.DataFrame()
@@ -140,7 +125,6 @@ def calcular_classificacao_completa(df_original):
             df_time['Gols_Contra'] = df_time['Gols_Contra_Jogo'].astype(int)
             df_final_jogos = pd.concat([df_final_jogos, df_time])
 
-        # Jogos onde o time é o 'Adversario'
         df_adversario = df[df['Adversario_Normalizado'] == time_normalizado].copy()
         if not df_adversario.empty:
             df_adversario['Time_Alvo'] = mapa_exibicao.get(time_normalizado, time_normalizado)
@@ -152,35 +136,28 @@ def calcular_classificacao_completa(df_original):
 
     df_final_jogos.drop_duplicates(subset=['Rodada', 'Time_Alvo'], keep='first', inplace=True)
 
-    # 1. Agrupar por Rodada e Time para somar os pontos, Gols Pro e Gols Contra
     df_rodada_time = df_final_jogos.groupby(['Rodada', 'Time_Alvo']).agg(
         Pontos=('Pontos', 'sum'),
         Gols_Pro=('Gols_Pro', 'sum'),
         Gols_Contra=('Gols_Contra', 'sum')
     ).reset_index()
 
-    # 2. Calcular Acumulado
     df_rodada_time['Pontos_Acumulados'] = df_rodada_time.groupby('Time_Alvo')['Pontos'].cumsum()
     df_rodada_time['Gols_Pro_Acumulados'] = df_rodada_time.groupby('Time_Alvo')['Gols_Pro'].cumsum()
     df_rodada_time['Gols_Contra_Acumulados'] = df_rodada_time.groupby('Time_Alvo')['Gols_Contra'].cumsum()
     df_rodada_time['Saldo_Gols_Acumulados'] = df_rodada_time['Gols_Pro_Acumulados'] - df_rodada_time[
         'Gols_Contra_Acumulados']
 
-    # 3. Calcular Classificação (Rank) por Rodada
-
-    # Normalizando Saldo de Gols para ranking
     min_sg = df_rodada_time['Saldo_Gols_Acumulados'].min()
     offset_sg = abs(min_sg) + 1
     df_rodada_time['SG_Normalizado'] = df_rodada_time['Saldo_Gols_Acumulados'] + offset_sg
 
-    # Criar a coluna de ordenação composta (Pontos + SG Normalizado + Gols Pró)
     df_rodada_time['Ordem_Classificacao'] = (
             df_rodada_time['Pontos_Acumulados'].astype(str).str.zfill(3) +
             df_rodada_time['SG_Normalizado'].astype(str).str.zfill(3) +
             df_rodada_time['Gols_Pro_Acumulados'].astype(str).str.zfill(3)
     )
 
-    # Recalcular o rank usando a coluna de ordenação
     df_rodada_time['Posição'] = df_rodada_time.groupby('Rodada')['Ordem_Classificacao'].rank(
         method='min', ascending=False
     ).astype(int)
@@ -189,10 +166,6 @@ def calcular_classificacao_completa(df_original):
 
 
 def gerar_tabela_adversarios_separada(file_path, times_foco, rodada_inicial):
-    """
-    Gera a tabela de adversários para os times de foco a partir da rodada inicial,
-    incluindo a posição do adversário na rodada do confronto, e retorna DataFrames separados.
-    """
     df_original = pd.read_csv(file_path)
 
     # 1. Calcular a classificação completa de todos os times
@@ -207,29 +180,24 @@ def gerar_tabela_adversarios_separada(file_path, times_foco, rodada_inicial):
     }, inplace=True)
     df_jogos['Rodada'] = df_jogos['Rodada'].astype(str).str.replace('Rodada da semana ', '', regex=False).astype(int)
 
-    # 3. Filtrar jogos a partir da rodada inicial
     df_jogos_filtrados = df_jogos[df_jogos['Rodada'] >= rodada_inicial].copy()
 
-    # 4. Criar o DataFrame final de adversários
     tabela_final = []
 
     for time_foco in times_foco:
         time_foco_normalizado = normalizar_nome(time_foco)
 
-        # Mapeamento de nomes para o CSV
         if time_foco == 'Botafogo':
             time_foco_normalizado_csv = 'botafogorj'
         else:
             time_foco_normalizado_csv = time_foco_normalizado
 
-        # Filtrar jogos onde o time de foco é o Time_Jogo
         df_como_time = df_jogos_filtrados[
             df_jogos_filtrados['Time_Jogo'].apply(normalizar_nome) == time_foco_normalizado_csv].copy()
         df_como_time['Adversario_Nome'] = df_como_time['Adversario'].apply(limpar_nome_exibicao)
         df_como_time['Local'] = 'Casa'
         df_como_time['Resultado'] = df_como_time['Resultado_Jogo']
 
-        # Filtrar jogos onde o time de foco é o Adversario
         df_como_adversario = df_jogos_filtrados[
             df_jogos_filtrados['Adversario'].apply(normalizar_nome) == time_foco_normalizado_csv].copy()
         df_como_adversario['Adversario_Nome'] = df_como_adversario['Time_Jogo'].apply(limpar_nome_exibicao)
@@ -237,18 +205,15 @@ def gerar_tabela_adversarios_separada(file_path, times_foco, rodada_inicial):
         df_como_adversario['Resultado'] = df_como_adversario['Resultado_Jogo'].replace(
             {'V': 'D', 'D': 'V'})  # Inverte o resultado
 
-        # Concatenar e selecionar colunas relevantes
         df_foco = pd.concat([
             df_como_time[['Rodada', 'Adversario_Nome', 'Local', 'Resultado']],
             df_como_adversario[['Rodada', 'Adversario_Nome', 'Local', 'Resultado']]
         ]).sort_values(by='Rodada').drop_duplicates(subset=['Rodada'])  # Apenas uma linha por rodada
 
-        # 6. Adicionar a posição do adversário na rodada do confronto
         for index, row in df_foco.iterrows():
             rodada = row['Rodada']
             adversario = row['Adversario_Nome']
 
-            # Encontrar a posição do adversário na rodada
             posicao_adversario = df_classificacao[
                 (df_classificacao['Rodada'] == rodada) &
                 (df_classificacao['Time_Alvo'] == adversario)
@@ -257,7 +222,6 @@ def gerar_tabela_adversarios_separada(file_path, times_foco, rodada_inicial):
                 (df_classificacao['Time_Alvo'] == adversario)
                 ].empty else np.nan
 
-            # Mapear V, E, D para o texto completo
             resultado_texto = ''
             if row['Resultado'] == 'V':
                 resultado_texto = 'Vitória'
@@ -307,3 +271,4 @@ if __name__ == "__main__":
         print(df_botafogo.to_markdown(numalign="center", stralign="center"))
     else:
         print(resultado)
+
